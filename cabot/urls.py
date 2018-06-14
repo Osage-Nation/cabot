@@ -10,7 +10,7 @@ from cabot.cabotapp.views import (
     JenkinsCheckCreateView, JenkinsCheckUpdateView,
     StatusCheckDeleteView, StatusCheckListView, StatusCheckDetailView,
     StatusCheckResultDetailView, StatusCheckReportView, UserProfileUpdateAlert,
-    PluginSettingsView, AlertTestView, AlertTestPluginView, SetupView)
+    PluginSettingsView, AlertTestView, AlertTestPluginView, SetupView, OnCallView)
 
 from cabot.cabotapp.views import (InstanceListView, InstanceDetailView,
     InstanceUpdateView, InstanceCreateView, InstanceDeleteView,
@@ -25,12 +25,14 @@ from rest_framework.documentation import include_docs_urls
 
 from django.contrib import admin
 from django.views.generic.base import RedirectView
+from django.views.static import serve
 from django.shortcuts import redirect
 from django.contrib.auth.views import login, logout, password_reset, password_reset_done, password_reset_confirm
 admin.autodiscover()
 
 from importlib import import_module
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,9 @@ def home_authentication_switcher(request, *args, **kwargs):
 urlpatterns = [
      # for the password reset views
      url('^', include('django.contrib.auth.urls')),
+
+     url(r'^(?P<path>favicon\.ico)$', serve, name='favicon',
+        kwargs={'document_root': os.path.join(settings.STATIC_ROOT, 'arachnys/img')}),
 
      url(r'^$', view=home_authentication_switcher,
         name='dashboard'),
@@ -162,6 +167,7 @@ urlpatterns = [
      # Comment below line to disable browsable rest api
      url(r'^api-auth/', include('rest_framework.urls', namespace='rest_framework')),
      url(r'^api/', include(rest_urls.router.urls)),
+     url(r'^api/oncall', view=OnCallView.as_view(), name='oncall'),
      url(r'^docs/', include_docs_urls(title="Cabot API", description="An API to create and view Cabot checks and services."))
 ]
 

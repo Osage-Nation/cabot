@@ -23,6 +23,7 @@ class JenkinsStatusCheck(StatusCheck):
             status = get_job_status(self.jenkins_config, self.name)
             active = status['active']
             result.job_number = status['job_number']
+            result.consecutive_failures = status['consecutive_failures']
             if status['status_code'] == 404:
                 result.error = u'Job %s not found on Jenkins' % self.name
                 result.succeeded = False
@@ -57,12 +58,24 @@ class JenkinsStatusCheck(StatusCheck):
             else:
                 result.succeeded = status['succeeded']
             if not status['succeeded']:
+                message = u'Job "%s" failing on Jenkins (%s)' % (self.name, status['consecutive_failures'])
                 if result.error:
-                    result.error += u'; Job "%s" failing on Jenkins' % self.name
+                    result.error += u'; %s' % message
                 else:
-                    result.error = u'Job "%s" failing on Jenkins' % self.name
+                    result.error = message
                 result.raw_data = status
         return result
+
+    def calculate_debounced_passing(self, recent_results, debounce=0):
+        """
+        `debounce` is the number of previous job failures we need (not including this)
+        to mark a search as passing or failing
+        Returns:
+          True if passing given debounce factor
+          False if failing
+        """
+        last_result = recent_results[0]
+        return last_result.consecutive_failures <= debounce
 
 
 class JenkinsConfig(models.Model):
@@ -77,9 +90,10 @@ class JenkinsConfig(models.Model):
 
 def create_default_jenkins_config():
     if not JenkinsConfig.objects.exists():
-        JenkinsConfig.objects.create(
-            name="Default Jenkins",
-            jenkins_api=os.environ.get("JENKINS_API"),
-            jenkins_user=os.environ.get("JENKINS_USER"),
-            jenkins_pass=os.environ.get("JENKINS_PASS"),
-        )
+        if os.environ.get("JENKINS_API"):
+            JenkinsConfig.objects.create(
+                name="Default Jenkins",
+                jenkins_api=os.environ.get("JENKINS_API", "http://jenkins.example.com"),
+                jenkins_user=os.environ.get("JENKINS_USER", ""),
+                jenkins_pass=os.environ.get("JENKINS_PASS", ""),
+            )

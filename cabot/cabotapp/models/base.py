@@ -49,7 +49,7 @@ def serialize_recent_results(recent_results):
     return ','.join(vals)
 
 
-def calculate_debounced_passing(recent_results, debounce=0):
+def default_calculate_debounced_passing(recent_results, debounce=0):
     """
     `debounce` is the number of previous failures we need (not including this)
     to mark a search as passing or failing
@@ -556,7 +556,7 @@ class StatusCheck(PolymorphicModel):
     def save(self, *args, **kwargs):
         if self.last_run:
             recent_results = list(self.recent_results())
-            if calculate_debounced_passing(recent_results, self.debounce):
+            if self.calculate_debounced_passing(recent_results, self.debounce):
                 self.calculated_status = Service.CALCULATED_PASSING_STATUS
             else:
                 self.calculated_status = Service.CALCULATED_FAILING_STATUS
@@ -573,6 +573,9 @@ class StatusCheck(PolymorphicModel):
         self.update_related_services()
         self.update_related_instances()
         return ret
+
+    def calculate_debounced_passing(self, recent_results, debounce=0):
+        return default_calculate_debounced_passing(recent_results, debounce=debounce)
 
     def duplicate(self, inst_set=(), serv_set=()):
         new_check = self
@@ -757,7 +760,8 @@ class HttpStatusCheck(StatusCheck):
 
         auth = None
         if self.username or self.password:
-            auth = (self.username, self.password)
+            auth = (self.username if self.username is not None else '',
+                    self.password if self.password is not None else '')
 
         try:
             resp = requests.get(
@@ -777,11 +781,11 @@ class HttpStatusCheck(StatusCheck):
                 result.error = u'Wrong code: got %s (expected %s)' % (
                     resp.status_code, int(self.status_code))
                 result.succeeded = False
-                result.raw_data = resp.content
+                result.raw_data = resp.text
             elif self.text_match:
-                if not self._check_content_pattern(self.text_match, resp.content):
+                if not self._check_content_pattern(self.text_match, resp.text):
                     result.error = u'Failed to find match regex /%s/ in response body' % self.text_match
-                    result.raw_data = resp.content
+                    result.raw_data = resp.text
                     result.succeeded = False
                 else:
                     result.succeeded = True
@@ -807,6 +811,7 @@ class StatusCheckResult(models.Model):
 
     # Jenkins specific
     job_number = models.PositiveIntegerField(null=True)
+    consecutive_failures = models.PositiveIntegerField(null=True)
 
     class Meta:
         ordering = ['-time_complete']

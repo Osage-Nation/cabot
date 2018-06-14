@@ -86,7 +86,7 @@ class LocalTestCase(APITestCase):
             jenkins_config = JenkinsConfig.objects.first()
         )
         self.http_check = HttpStatusCheck.objects.create(
-            name='Http Check',
+            name='HTTP Check',
             created_by=self.user,
             importance=Service.CRITICAL_STATUS,
             endpoint='http://arachnys.com',
@@ -158,6 +158,7 @@ def fake_jenkins_response(*args, **kwargs):
         'active': True,
         'status_code': 200,
         'blocked_build_time': None,
+        'consecutive_failures': 0,
         'succeeded': False,
         'job_number': 176
     }
@@ -168,6 +169,7 @@ def jenkins_blocked_response(*args, **kwargs):
         'active': True,
         'status_code': 200,
         'blocked_build_time': 108616352.65387,
+        'consecutive_failures': 1,
         'succeeded': False,
         'job_number': 1999
     }
@@ -176,6 +178,7 @@ def jenkins_blocked_response(*args, **kwargs):
 def fake_http_200_response(*args, **kwargs):
     resp = Mock()
     resp.content = get_content('http_response.html')
+    resp.text = unicode(resp.content, 'utf-8')
     resp.status_code = 200
     return resp
 
@@ -183,6 +186,7 @@ def fake_http_200_response(*args, **kwargs):
 def fake_http_404_response(*args, **kwargs):
     resp = Mock()
     resp.content = get_content('http_response.html')
+    resp.text = unicode(resp.content, 'utf-8')
     resp.status_code = 404
     return resp
 
@@ -457,6 +461,8 @@ class TestCheckRun(LocalTestCase):
         self.assertFalse(self.http_check.last_result().succeeded)
         self.assertEqual(self.http_check.calculated_status,
                          Service.CALCULATED_FAILING_STATUS)
+        self.assertIn(u'Failed to find match regex',
+            self.http_check.last_result().error)
 
     @patch('cabot.cabotapp.models.requests.get', throws_timeout)
     def test_timeout_handling_in_http(self):
@@ -552,6 +558,19 @@ class TestWebInterface(LocalTestCase):
     def setUp(self):
         super(TestWebInterface, self).setUp()
         self.client = Client()
+
+    def test_404_page_anonymous_user(self):
+        response = self.client.get('/not/found/for/sure')
+        self.assertIn('Page not found.', response.content)
+        self.assertNotIn('Profile Settings', response.content)
+        self.assertEqual(response.status_code, 404)
+
+    def test_404_page_logged_in_user(self):
+        self.client.login(username=self.username, password=self.password)
+        response = self.client.get('/not/found/for/sure')
+        self.assertIn('Page not found.', response.content)
+        self.assertIn('Profile Settings', response.content)
+        self.assertEqual(response.status_code, 404)
 
     def test_set_recovery_instructions(self):
         # Get service page - will get 200 from login page
@@ -654,6 +673,10 @@ class TestWebInterface(LocalTestCase):
         expected = '<a href="http://example.com/" title="http://example.com/" target="_blank">Public service with url</a>'
         self.assertIn(expected, response.content)
 
+    def test_favicon_ico(self):
+        response = self.client.get('/favicon.ico')
+        self.assertEqual(response.status_code, 200)
+
 
 class TestAPI(LocalTestCase):
     def setUp(self):
@@ -726,7 +749,7 @@ class TestAPI(LocalTestCase):
                     'calculated_status': u'passing',
                 },
                 {
-                    'name': u'Http Check',
+                    'name': u'HTTP Check',
                     'active': True,
                     'importance': u'CRITICAL',
                     'frequency': 5,
@@ -762,7 +785,7 @@ class TestAPI(LocalTestCase):
             ],
             'httpstatuscheck': [
                 {
-                    'name': u'Http Check',
+                    'name': u'HTTP Check',
                     'active': True,
                     'importance': u'CRITICAL',
                     'frequency': 5,
@@ -1045,7 +1068,7 @@ class TestAlerts(LocalTestCase):
         super(TestAlerts, self).setUp()
 
         self.warning_http_check = HttpStatusCheck.objects.create(
-            name='Http Check',
+            name='HTTP Check',
             created_by=self.user,
             importance=Service.WARNING_STATUS,
             endpoint='http://arachnys.com',
@@ -1054,7 +1077,7 @@ class TestAlerts(LocalTestCase):
             text_match=None,
         )
         self.error_http_check = HttpStatusCheck.objects.create(
-            name='Http Check',
+            name='HTTP Check',
             created_by=self.user,
             importance=Service.ERROR_STATUS,
             endpoint='http://arachnys.com',

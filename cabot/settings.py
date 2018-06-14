@@ -147,6 +147,7 @@ INSTALLED_APPS = (
     'dal',
     'dal_select2',
     'django.contrib.admin',
+    'bootstrapform',
 )
 
 AUTH_USER_MODEL = 'auth.User'
@@ -281,6 +282,7 @@ AUTH_GITHUB_ORG = force_bool(os.environ.get('AUTH_GITHUB_ORG', False))
 AUTH_GOOGLE_OAUTH2 = force_bool(os.environ.get('AUTH_GOOGLE_OAUTH2', False))
 
 AUTH_SOCIAL = AUTH_GITHUB_ORG or AUTH_GITHUB_ENTERPRISE_ORG or AUTH_GOOGLE_OAUTH2
+SOCIAL_AUTH_REDIRECT_IS_HTTPS = force_bool(os.environ.get('SOCIAL_AUTH_REDIRECT_IS_HTTPS', False))
 
 if AUTH_SOCIAL:
     SOCIAL_AUTH_URL_NAMESPACE = 'social'
